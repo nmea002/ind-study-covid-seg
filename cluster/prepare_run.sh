@@ -3,13 +3,13 @@
 # Run on the login node, once per dataset:
 #   bash prepare_run.sh qata   ../LViT_QaTa-COV19-v2.zip
 #   bash prepare_run.sh mosmed ../LViT_MosMedData.zip
-# Result: ~/projects/lvit/runs/<name>/LViT/  (training output lands in there too)
+# Result: <project>/runs/<name>/LViT/  (training output lands in there too)
 set -euo pipefail
 
 NAME="$1"
 ZIP="$(realpath "$2")"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-RUN="$HOME/projects/lvit/runs/$NAME"
+RUN="$(dirname "$HERE")/runs/$NAME"  # inside the project folder
 
 if [ -d "$RUN/LViT" ]; then
     echo "$RUN/LViT already exists -- delete it first if you really want a fresh unzip (it may hold trained models)."

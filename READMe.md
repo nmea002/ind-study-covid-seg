@@ -42,7 +42,7 @@ Each dataset therefore has a raw copy and an LViT-layout copy:
 | `LViT/datasets/archive/QaTa-COV19/QaTa-COV19-v2/` | Raw QaTa download | (downloaded) |
 | `LViT/datasets/Covid19/` | QaTa in the LViT layout. The LViT code calls QaTa `Covid19`. | `build_qata_folders.py` |
 | `LViT/datasets/MosMedData/` | Raw MosMed, plus the LViT authors' text CSVs | (downloaded) |
-| `LViT/datasets/MosMedPlus/` | MosMed in the LViT layout. Exists only inside `LViT_MosMedData.zip`. | `build_mosmed_zip.py` |
+| `LViT/datasets/MosMedPlus/` | MosMed in the LViT layout. Exists only inside `LViT_MosMedData.zip`. | `build_lvit_zip.py` |
 
 `LViT/datasets/Covid19/` is not a third dataset. It contains the same files as the raw QaTa download, byte for byte, sorted into train/val/test folders. It also holds the files that define the QaTa train/val split and its text: `Train_ID_for_Covid19.xlsx`, `Val_ID_for_Covid19.xlsx` and the text spreadsheets. **Do not delete it.**
 
@@ -103,8 +103,22 @@ Run from the project root, in this order:
 |---|---|
 | `python make_splits.py` | Builds `splits/qata_split.csv` and `splits/mosmed_split.csv` from the raw data and checks them. Re-running produces the same split. |
 | `python build_qata_folders.py` | Fills `LViT/datasets/Covid19/{Train,Val,Test}_Folder` with exactly the QaTa split, copying from the raw archive. Running it again changes nothing. |
-| `python build_mosmed_zip.py` | Builds `LViT_MosMedData.zip`: the LViT code plus MosMed in the `MosMedPlus` layout, using the full split. |
+| `python build_lvit_zip.py all` | Builds `LViT_QaTa-COV19-v2.zip` and `LViT_MosMedData.zip` (or pass `qata` / `mosmed` for one): the LViT code plus the full split of a dataset in the LViT layout, for the server. |
+| `python build_model_data.py all all --zip` | Exports the same split for MedCLIPSeg (`model_data/medclipseg/<Covid19/MosMedPlus>/`, its folder layout + prompt spreadsheets) and MedSAM3 (`model_data/medsam3/<qata/mosmed>/`, COCO format with one instance per lesion), plus a zip of each for the server. Masks are binarized (> 0 = lesion). |
 | `python evaluate.py --dataset <qata/mosmed> --split <val/test> --pred_dir <dir>` | Shared evaluation for all models: Dice, IoU, HD95 and ASSD on a folder of predicted mask PNGs, measured at the ground-truth resolution. |
 | `python run_report.py --dataset <qata/mosmed> --run_dir <dir>` | Finishes a run the same way for every model: picks the threshold on val, evaluates val and test once, plots training curves and saves example figures. Training scripts call it automatically. |
 
-The school server gets its data from the zips, which `cluster/prepare_run.sh` unpacks. There is no QaTa zip builder yet.
+## On the school server
+
+The server gets its data from the zips. Copy the whole project folder (the code, `splits/` and both zips; the raw data under `LViT/datasets/` is not needed), then from `cluster/`:
+
+```
+bash prepare_run.sh qata   ../LViT_QaTa-COV19-v2.zip     # once per dataset: unzip + patch into <project>/runs/<name>/
+bash prepare_run.sh mosmed ../LViT_MosMedData.zip
+sbatch -J lvit-qata   train_lvit.slurm qata              # LViT
+sbatch -J lvit-mosmed train_lvit.slurm mosmed
+sbatch -J unet-qata   train_unet.slurm qata              # U-Net, same run folder and data
+sbatch -J unet-mosmed train_unet.slurm mosmed
+```
+
+Each run ends with the shared report (`run_report.py`) in its session folder.

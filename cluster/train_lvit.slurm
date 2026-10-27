@@ -4,7 +4,7 @@
 #   sbatch -J lvit-qata   train_lvit.slurm qata
 #   sbatch -J lvit-mosmed train_lvit.slurm mosmed
 # Max 100 epochs, early stop after 20 with no val improvement (Config.py).
-# Output: ~/projects/lvit/runs/<name>/LViT/<task>/LViT/Test_session_<date>/
+# Output: <project>/runs/<name>/LViT/<task>/LViT/Test_session_<date>/
 #   models/, log, history.csv, preds_val/, preds_test/, run_config.json, metrics.json, per_image_*.csv,
 #   curves.png, examples/, report.txt
 #SBATCH --job-name=lvit
@@ -20,7 +20,7 @@
 set -euo pipefail
 NAME="${1:?usage: sbatch train_lvit.slurm <qata|mosmed>}"
 PROJECT="$(cd "$SLURM_SUBMIT_DIR/.." && pwd)"
-RUN="$HOME/projects/lvit/runs/$NAME/LViT"
+RUN="$PROJECT/runs/$NAME/LViT"
 cd "$RUN"
 
 module load cuda/13.0

@@ -1,1 +1,9 @@
 /research papers
+
+# dataset zips for the server (too big for git; rebuild with build_lvit_zip.py)
+*.zip
+# MedCLIPSeg / MedSAM3 exports of the splits (rebuild with build_model_data.py)
+model_data/
+
+# training runs (on the server)
+runs/
