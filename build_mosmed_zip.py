@@ -1,9 +1,7 @@
 """Package LViT + MosMedData+ into LViT_MosMedData.zip for training on the cluster (cluster/prepare_run.sh).
 
-Uses the fixed split from split_mosmed.py:
-    MosMed_test.csv  -> Test_Folder (the test set, only used once at the end)
-    MosMed_train.csv -> Train_Folder + Val_Folder (val = a few whole scans held out for early stopping)
-The full train/val/test split is saved to MosMed_split.csv so every model trains and tests on the same slices.
+Uses the frozen split in splits/mosmed_split.csv (run make_splits.py first):
+    train -> Train_Folder, val -> Val_Folder (early stopping), test -> Test_Folder (only used once at the end)
 
 Zip layout matches what the LViT code expects (same as the QaTa zip):
     LViT/datasets/MosMedPlus/{Train,Val,Test}_Folder/{img,labelcol}/<name>.png
@@ -14,7 +12,6 @@ Config.py / train_model.py / test_model.py are patched to also accept 'MosMedPlu
 """
 import io
 import os
-import random
 import zipfile
 
 import numpy as np
@@ -25,9 +22,8 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 LVIT = os.path.join(ROOT, "LViT")
 DATA_DIR = os.path.join(LVIT, "datasets", "MosMedData")
 OUT_ZIP = os.path.join(ROOT, "LViT_MosMedData.zip")
+SPLIT_CSV = os.path.join(ROOT, "splits", "mosmed_split.csv")
 TASK = "MosMedPlus"
-VAL_FRACTION = 0.125  # of the training slices (~270, same size as the authors' val set)
-SEED = 42
 
 CODE_FILES = ["Config.py", "Load_Dataset.py", "train_model.py", "test_model.py", "Train_one_epoch.py",
               "utils.py", "requirements.txt", "README.md", "LICENSE",
@@ -42,20 +38,6 @@ PATCHES = [
     ("test_model.py", 'model_path = "./Covid19/" + model_type',
      'model_path = "./" + config.task_name + "/" + model_type'),
 ]
-
-
-def split_val(train):
-    """Hold out whole scans from the training CSV until ~VAL_FRACTION of its slices are in val."""
-    scans = sorted(train["scan"].unique())
-    random.Random(SEED).shuffle(scans)
-    sizes = train["scan"].value_counts()
-    target = VAL_FRACTION * len(train)
-    val_scans, n_val = set(), 0
-    for s in scans:
-        if abs(n_val + sizes[s] - target) < abs(n_val - target):
-            val_scans.add(s)
-            n_val += sizes[s]
-    return train[~train["scan"].isin(val_scans)], train[train["scan"].isin(val_scans)]
 
 
 def gray_png_bytes(path):
@@ -76,12 +58,9 @@ def xlsx_bytes(df):
     return buf.getvalue()
 
 
-train_all = pd.read_csv(os.path.join(DATA_DIR, "MosMed_train.csv"))
-test = pd.read_csv(os.path.join(DATA_DIR, "MosMed_test.csv"))
-train, val = split_val(train_all)
-split = pd.concat([train.assign(split="train"), val.assign(split="val"), test.assign(split="test")])
-split.to_csv(os.path.join(DATA_DIR, "MosMed_split.csv"), index=False)
-assert not set(train["scan"]) & set(val["scan"]) and not set(train_all["scan"]) & set(test["scan"])
+split = pd.read_csv(SPLIT_CSV)
+train, val, test = (split[split["split"] == s] for s in ["train", "val", "test"])
+assert not set(train["scan"]) & set(val["scan"]) and not set(train["scan"]) & set(test["scan"])     and not set(val["scan"]) & set(test["scan"])
 
 with zipfile.ZipFile(OUT_ZIP, "w", zipfile.ZIP_DEFLATED) as z:
     for f in CODE_FILES:

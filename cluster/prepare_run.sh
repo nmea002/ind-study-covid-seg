@@ -27,6 +27,8 @@ sed -i 's/^\(\s*\)self.bert_embedding = BertEmbedding()$/&\n\1self.bert_embeddin
 sed -i 's/from scipy.ndimage.interpolation import zoom/from scipy.ndimage import zoom/' Load_Dataset.py
 # torch >= 2.6 defaults to weights_only=True, which rejects the numpy values saved in the checkpoint
 sed -i "s/torch.load(\(.*\), map_location='cuda')/torch.load(\1, map_location='cuda', weights_only=False)/" test_model.py train_model.py
+# write history.csv (per-epoch train/val loss and Dice) for the training curves
+python3 "$HERE/patch_lvit.py"
 # log every 50 batches instead of every batch
 sed -i 's/^print_frequency = .*/print_frequency = 50/' Config.py
 

@@ -4,16 +4,21 @@ Everything except the model is kept the same as the LViT runs, using the LViT re
   - data: the same zips / folders (Train_Folder, Val_Folder, Test_Folder), so the same full split
   - augmentation: Load_Dataset.RandomGenerator / ValGenerator, images read and resized to 224 the same way
   - loss: utils.WeightedDiceBCE(0.5, 0.5); Adam lr 3e-4; cosine warm restarts (T_0=10, eta_min=1e-4) stepped per epoch
-  - batch size 2, 20 epochs, seed 666; best model = best val Dice, only saved after epoch 5 (same rule as train_model.py)
-  - test: per-image Dice and IoU at threshold 0.5, averaged over the test images (same as test_model.py)
+  - batch size 2, seed 42; best model = best val Dice, only saved after epoch 5 (same rule as train_model.py)
+  - max 100 epochs, early stop after 20 epochs without a new best val Dice (same as LViT's Config.py)
 The U-Net takes no text, so the BERT text embedding is skipped (bert_embedding is stubbed out to import Load_Dataset).
 
-Usage (Colab, after unzipping a dataset zip to /content):
+After training, the best checkpoint predicts every val and test image (probability maps in preds_val/, preds_test/),
+and run_report.finalize_run picks the threshold on val and reports Dice / IoU / HD95 / ASSD with evaluate.py,
+plus curves.png (from history.csv) and examples/. Settings are recorded in run_config.json.
+
+Usage:
     python train_unet.py --task Covid19       # QaTa-COV19-v2
-    python train_unet.py --task MosMedPlus    # MosMedData+
-    python train_unet.py --task MosMedPlus --test_only <session folder>
+    python train_unet.py --task MosMedPlus --lvit_dir <unzipped LViT folder>   # MosMedData+
+    python train_unet.py --task MosMedPlus --lvit_dir <...> --test_only <session folder>   # predict + report only
 """
 import argparse
+import csv
 import os
 import random
 import sys
@@ -23,23 +28,24 @@ import types
 import cv2
 import numpy as np
 import torch
-from sklearn.metrics import jaccard_score
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 
 p = argparse.ArgumentParser()
 p.add_argument("--task", required=True, choices=["Covid19", "MosMedPlus"])
-p.add_argument("--lvit_dir", default="/content/LViT", help="unzipped LViT folder (code + datasets/<task>)")
+p.add_argument("--lvit_dir", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "LViT"),
+               help="LViT folder (code + datasets/<task>)")
 p.add_argument("--out_dir", default=None, help="where sessions are saved (default <lvit_dir>/UNet_runs/<task>)")
-p.add_argument("--epochs", type=int, default=20)
+p.add_argument("--epochs", type=int, default=100, help="max epochs")
+p.add_argument("--patience", type=int, default=20, help="stop after this many epochs without a new best val Dice")
 p.add_argument("--batch_size", type=int, default=2)
 p.add_argument("--lr", type=float, default=3e-4)
 p.add_argument("--img_size", type=int, default=224)
-p.add_argument("--seed", type=int, default=666)
+p.add_argument("--seed", type=int, default=42)
 p.add_argument("--workers", type=int, default=2)
 p.add_argument("--print_frequency", type=int, default=50)
 p.add_argument("--limit", type=int, default=0, help="debug: only use the first N images of each folder")
-p.add_argument("--test_only", default=None, help="session folder to test (skips training)")
+p.add_argument("--test_only", default=None, help="session folder to predict + report on (skips training)")
 args = p.parse_args()
 
 # reuse the LViT repo's code; Load_Dataset imports bert_embedding at the top, which the U-Net doesn't need
@@ -49,9 +55,12 @@ from Load_Dataset import RandomGenerator, ValGenerator, correct_dims  # noqa: E4
 from nets.UNet import UNet  # noqa: E402
 from utils import WeightedDiceBCE, iou_on_batch  # noqa: E402
 
+from run_report import finalize_run, save_prob_mask, write_run_config  # noqa: E402
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 data_dir = os.path.join(args.lvit_dir, "datasets", args.task)
 out_dir = args.out_dir or os.path.join(args.lvit_dir, "UNet_runs", args.task)
+dataset = {"Covid19": "qata", "MosMedPlus": "mosmed"}[args.task]
 
 
 class SegFolder(Dataset):
@@ -148,6 +157,23 @@ def train():
 
     model = UNet(n_channels=3, n_classes=1).to(device)
     log("params: {}".format(sum(q.numel() for q in model.parameters())), log_path)
+    write_run_config(session_dir, {
+        "model": "U-Net", "dataset": dataset, "task": args.task, "data_dir": data_dir,
+        "n_train": len(train_set), "n_val": len(val_set),
+        "preprocessing": "image read as 3-channel uint8 and mask as grayscale (cv2), both resized to {0}x{0} "
+                         "(bilinear), mask > 0 = lesion; train augmentation: LViT RandomGenerator (random rot90/flip "
+                         "or rotation), val/test: LViT ValGenerator (to tensor, 0-1)".format(args.img_size),
+        "prompts": "none (U-Net is image-only)",
+        "training": {"loss": "WeightedDiceBCE(0.5, 0.5)", "optimizer": "Adam", "lr": args.lr,
+                     "scheduler": "CosineAnnealingWarmRestarts(T_0=10, T_mult=1, eta_min=1e-4), stepped per epoch",
+                     "batch_size": args.batch_size, "max_epochs": args.epochs,
+                     "early_stopping": "stop after {} epochs without a new best val Dice".format(args.patience),
+                     "checkpoint_rule": "best val Dice (hard, threshold 0.5), saved from epoch 6 on"},
+        "seed": args.seed, "checkpoint": os.path.join(session_dir, "best_model-UNet.pth.tar"),
+        "args": vars(args)})
+    history_path = os.path.join(session_dir, "history.csv")
+    with open(history_path, "w", newline="") as f:
+        csv.writer(f).writerow(["epoch", "train_loss", "train_dice", "val_loss", "val_dice"])
     criterion = WeightedDiceBCE(dice_weight=0.5, BCE_weight=0.5)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=1, eta_min=1e-4)
@@ -156,12 +182,14 @@ def train():
     for epoch in range(args.epochs):
         log("\n========= Epoch [{}/{}] =========".format(epoch + 1, args.epochs), log_path)
         model.train()
-        run_epoch(train_loader, model, criterion, optimizer, epoch, log_path)
+        train_loss, train_dice = run_epoch(train_loader, model, criterion, optimizer, epoch, log_path)
         log("Validation", log_path)
         model.eval()
         with torch.no_grad():
             val_loss, val_dice = run_epoch(val_loader, model, criterion, optimizer, epoch, log_path)
         scheduler.step()
+        with open(history_path, "a", newline="") as f:
+            csv.writer(f).writerow([epoch + 1, train_loss, train_dice, val_loss, val_dice])
         if val_dice > max_dice and epoch + 1 > 5:
             log("\t Saving best model, mean dice increased from: {:.4f} to {:.4f}".format(max_dice, val_dice),
                 log_path)
@@ -171,35 +199,37 @@ def train():
                        os.path.join(session_dir, "best_model-UNet.pth.tar"))
         else:
             log("\t Mean dice:{:.4f} (best {:.4f} in epoch {})".format(val_dice, max_dice, best_epoch), log_path)
+        early_stopping_count = epoch - best_epoch + 1  # same count as train_model.py
+        log("\t early_stopping_count: {}/{}".format(early_stopping_count, args.patience), log_path)
+        if early_stopping_count > args.patience:
+            log("\t early_stopping!", log_path)
+            break
     log("\nbest val Dice {:.4f} in epoch {}".format(max_dice, best_epoch), log_path)
     return session_dir
 
 
-def test(session_dir):
-    log_path = os.path.join(session_dir, "test_results.txt")
+def predict_and_report(session_dir):
+    """Best checkpoint -> probability maps for every val and test image, then the shared report (run_report.py)."""
     ckpt = torch.load(os.path.join(session_dir, "best_model-UNet.pth.tar"), map_location=device)
     model = UNet(n_channels=3, n_classes=1).to(device)
     model.load_state_dict(ckpt["state_dict"])
     model.eval()
-    test_set = SegFolder(os.path.join(data_dir, "Test_Folder"), ValGenerator(output_size=[args.img_size] * 2))
-    loader = DataLoader(test_set, batch_size=1, shuffle=False, num_workers=args.workers)
-    log("UNet test on {} | session {} | best epoch {} | {} test images".format(
-        args.task, os.path.basename(session_dir), ckpt["epoch"] + 1, len(test_set)), log_path)
-    dice_sum, iou_sum = 0.0, 0.0
-    with torch.no_grad():
-        for images, masks, _ in loader:
-            pred = (model(images.to(device)) > 0.5).float()[0, 0].cpu().numpy()
-            lab = masks[0].numpy().astype(np.float32)
-            # same formulas as test_model.show_image_with_dice
-            dice_sum += 2 * np.sum(lab * pred) / (np.sum(lab) + np.sum(pred) + 1e-5)
-            iou_sum += jaccard_score(lab.reshape(-1), pred.reshape(-1), zero_division=0)
-    log("dice_pred {:.4f}".format(dice_sum / len(test_set)), log_path)
-    log("iou_pred {:.4f}".format(iou_sum / len(test_set)), log_path)
+    log("UNet {} | session {} | best epoch {} (val Dice {:.4f})".format(
+        args.task, os.path.basename(session_dir), ckpt["epoch"] + 1, ckpt["val_dice"]))
+    for split, folder in [("val", "Val_Folder"), ("test", "Test_Folder")]:
+        data = SegFolder(os.path.join(data_dir, folder), ValGenerator(output_size=[args.img_size] * 2))
+        loader = DataLoader(data, batch_size=1, shuffle=False, num_workers=args.workers)
+        with torch.no_grad():
+            for images, _, names in loader:
+                prob = model(images.to(device))[0, 0].cpu().numpy()
+                save_prob_mask(prob, os.path.join(session_dir, "preds_" + split, names[0]))
+        log("saved {} {} predictions".format(len(data), split))
+    finalize_run(dataset, session_dir, data_root=data_dir, require_all=not args.limit, best_epoch=ckpt["epoch"] + 1)
 
 
 if __name__ == "__main__":
     seed_everything(args.seed)
     if args.test_only:
-        test(args.test_only if os.path.isabs(args.test_only) else os.path.join(out_dir, args.test_only))
+        predict_and_report(args.test_only if os.path.isabs(args.test_only) else os.path.join(out_dir, args.test_only))
     else:
-        test(train())
+        predict_and_report(train())

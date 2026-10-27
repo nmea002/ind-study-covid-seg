@@ -1,9 +1,12 @@
 #!/bin/bash
-# Train LViT on one prepared dataset, then test the best model.
+# Train LViT on one prepared dataset, then predict val + test with the best model and report (predict_lvit.py).
+# Submit from the cluster/ folder of the project (predict_lvit.py needs ../evaluate.py, ../run_report.py, ../splits/):
 #   sbatch -J lvit-qata   train_lvit.slurm qata
 #   sbatch -J lvit-mosmed train_lvit.slurm mosmed
 # Max 100 epochs, early stop after 20 with no val improvement (Config.py).
-# Output: ~/projects/lvit/runs/<name>/LViT/<task>/LViT/Test_session_<date>/  (models/, log, test_results.txt)
+# Output: ~/projects/lvit/runs/<name>/LViT/<task>/LViT/Test_session_<date>/
+#   models/, log, history.csv, preds_val/, preds_test/, run_config.json, metrics.json, per_image_*.csv,
+#   curves.png, examples/, report.txt
 #SBATCH --job-name=lvit
 #SBATCH --partition=gpu
 #SBATCH --nodes=1
@@ -16,6 +19,7 @@
 
 set -euo pipefail
 NAME="${1:?usage: sbatch train_lvit.slurm <qata|mosmed>}"
+PROJECT="$(cd "$SLURM_SUBMIT_DIR/.." && pwd)"
 RUN="$HOME/projects/lvit/runs/$NAME/LViT"
 cd "$RUN"
 
@@ -35,10 +39,8 @@ if [ "${2:-}" != "test" ]; then
     python -u train_model.py
 fi
 
-# 2. Test the newest session's best model (README step 3: test_session goes in Config.py)
+# 2. Predict val + test with the newest session's best model, pick the threshold on val, report (run_report.py)
 SESSION=$(ls "$TASK/LViT" | sort | tail -1)
-echo "testing session: $SESSION"
-sed -i '/test_session = "Test_session_[0-9.]*_[0-9h]*"$/d' Config.py
-# leading \n: Config.py doesn't end with a newline, so a plain append would land inside its last comment
-printf '\ntest_session = "%s"\n' "$SESSION" >> Config.py
-python -u test_model.py 2>&1 | tee "$TASK/LViT/$SESSION/test_results.txt"
+echo "session: $SESSION"
+python -u "$PROJECT/cluster/predict_lvit.py" --project_dir "$PROJECT" --session "$SESSION" 2>&1 \
+    | tee "$TASK/LViT/$SESSION/report.txt"
