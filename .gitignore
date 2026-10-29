@@ -1,9 +1,51 @@
 /research papers
 
+# ---- no data on GitHub: datasets, exports, images, predictions, checkpoints ----
+# raw datasets wherever they sit
+QaTa-COV19*/
+MosMed*/
+datasets/
 # dataset zips for the server (too big for git; rebuild with build_lvit_zip.py)
 *.zip
+*.tar
+*.tar.gz
+*.tgz
 # MedCLIPSeg / MedSAM3 exports of the splits (rebuild with build_model_data.py)
 model_data/
-
-# training runs (on the server)
+# training runs (on the server): predictions, examples, checkpoints, reports
 runs/
+# image / volume / array files of any kind
+*.png
+*.jpg
+*.jpeg
+*.bmp
+*.tif
+*.tiff
+*.nii
+*.nii.gz
+*.dcm
+*.npy
+*.npz
+*.h5
+*.xlsx
+# model weights
+*.pth
+*.pt
+*.pth.tar
+*.ckpt
+*.safetensors
+*.bin
+# notebooks (outputs can embed images)
+*.ipynb
+.ipynb_checkpoints/
+
+# third-party code: cloned by cluster/setup_*.sh, not part of this repo
+/LViT/
+/MedCLIPSeg/
+/MedSAM3/
+
+# local / generated
+__pycache__/
+*.pyc
+.vscode/
+logs/
