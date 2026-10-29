@@ -4,7 +4,7 @@
 # Submit from the cluster/ folder of the project (needs ../train_unet.py, ../evaluate.py, ../run_report.py, ../splits/):
 #   sbatch -J unet-qata   train_unet.slurm qata
 #   sbatch -J unet-mosmed train_unet.slurm mosmed
-# Max 100 epochs, early stop after 20 with no val improvement.
+# Max 50 epochs, early stop after 20 with no val improvement.
 # Output: <project>/runs/<name>/LViT/UNet_runs/<task>/Test_session_<date>/
 #   best_model-UNet.pth.tar, log, history.csv, preds_val/, preds_test/, run_config.json, metrics.json,
 #   per_image_*.csv, curves.png, examples/
@@ -14,7 +14,7 @@
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
-#SBATCH --time=24:00:00
+#SBATCH --time=12:00:00   # max on the gpu partition
 #SBATCH --output=/mnt/cv_data/users/%u/logs/%x-%j.out
 #SBATCH --error=/mnt/cv_data/users/%u/logs/%x-%j.err
 

@@ -1,0 +1,64 @@
+# MedSAM3/configs/full_lora_config.yaml (the config the released MedSAM3 LoRA weights are used with),
+# except: data_dir -> our COCO export of the frozen split (build_model_data.py), relative to the MedSAM3/
+# folder that training runs from; batch_size 2 (shares the GPU with other runs); num_epochs 50 (the
+# project's cap; early stopping on val Dice is in medsam3_setup/train.py); output_dir -> runs/medsam3.
+evaluation:
+  compute_metrics_during_training: true
+  metric: iou
+  save_predictions: false
+hardware:
+  dataloader_pin_memory: true
+  device: cuda
+  use_compile: false
+lora:
+  alpha: 32
+  apply_to_detr_decoder: true
+  apply_to_detr_encoder: true
+  apply_to_geometry_encoder: true
+  apply_to_mask_decoder: true
+  apply_to_text_encoder: true
+  apply_to_vision_encoder: true
+  dropout: 0.1
+  rank: 16
+  target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - out_proj
+  - qkv
+  - proj
+  - fc1
+  - fc2
+  - c_fc
+  - c_proj
+  - linear1
+  - linear2
+model:
+  cache_dir: null
+  name: facebook/sam3
+output:
+  hub_model_id: null
+  logging_dir: logs
+  output_dir: ../runs/medsam3/mosmed/finetune
+  push_to_hub: false
+  save_lora_only: true
+training:
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_epsilon: 1e-8
+  batch_size: 2
+  data_dir: ../model_data/medsam3/mosmed
+  eval_steps: 100
+  gradient_accumulation_steps: 8
+  learning_rate: 5e-5
+  logging_steps: 10
+  lr_scheduler: cosine
+  max_grad_norm: 1.0
+  mixed_precision: bf16
+  num_epochs: 50
+  num_workers: 4
+  save_steps: 100
+  save_total_limit: 5
+  seed: 42
+  warmup_steps: 200
+  weight_decay: 0.01

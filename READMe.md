@@ -122,3 +122,14 @@ sbatch -J unet-mosmed train_unet.slurm mosmed
 ```
 
 Each run ends with the shared report (`run_report.py`) in its session folder.
+
+MedCLIPSeg (Milestone 1): our training and prediction wrappers and configs are in `medclipseg_setup/`; the MedCLIPSeg repo itself is used unchanged. Also copy `medclipseg_setup/` and `model_data/medclipseg/*.zip` to the server, then from `cluster/`:
+
+```
+bash setup_medclipseg.sh                                     # once, on the login node: clone, env, weights, unzip data
+sbatch -J mcs-sanity train_medclipseg.slurm qata sanity      # released QaTa checkpoint on our val split
+sbatch -J mcs-qata   train_medclipseg.slurm qata             # train + predict + report (resubmits itself near 12 h)
+sbatch -J mcs-mosmed train_medclipseg.slurm mosmed
+```
+
+Output: `runs/medclipseg/<Covid19|MosMedPlus>/trained_models/seed42/`.

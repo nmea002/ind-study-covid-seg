@@ -3,7 +3,7 @@
 # Submit from the cluster/ folder of the project (predict_lvit.py needs ../evaluate.py, ../run_report.py, ../splits/):
 #   sbatch -J lvit-qata   train_lvit.slurm qata
 #   sbatch -J lvit-mosmed train_lvit.slurm mosmed
-# Max 100 epochs, early stop after 20 with no val improvement (Config.py).
+# Max 50 epochs, early stop after 20 with no val improvement (Config.py).
 # Output: <project>/runs/<name>/LViT/<task>/LViT/Test_session_<date>/
 #   models/, log, history.csv, preds_val/, preds_test/, run_config.json, metrics.json, per_image_*.csv,
 #   curves.png, examples/, report.txt
@@ -13,7 +13,7 @@
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
-#SBATCH --time=24:00:00
+#SBATCH --time=12:00:00   # max on the gpu partition
 #SBATCH --output=/mnt/cv_data/users/%u/logs/%x-%j.out
 #SBATCH --error=/mnt/cv_data/users/%u/logs/%x-%j.err
 

@@ -4,8 +4,9 @@ Each model only has to save one predicted mask per image as a PNG named like the
 (e.g. covid_1.png, Jun_coronacases_case8_12.png), either binary (0/255) or a probability map (0-255 = 0-1).
 This script does the rest the same way for all models, so the numbers are comparable:
   - ground truth: the raw masks (QaTa 224x224, MosMed 512x512), foreground = any value > 0 (same as LViT's loader).
-    Read from the raw download by default, or with --data_root from an LViT-layout copy of the dataset
-    (<data_root>/{Train,Val,Test}_Folder/labelcol/, e.g. on the server, where only the unzipped copy exists)
+    Read from the raw download by default, or with --data_root from an exported copy of the dataset
+    (<data_root>/{Train,Val,Test}_Folder/{labelcol (LViT) or label (MedCLIPSeg)}/, e.g. on the server, where
+    only the unzipped copies exist)
   - predictions are resized to the ground-truth size (bilinear) and thresholded at --threshold (default 0.5);
     select_threshold() picks the threshold with the best mean Dice on val (use that one for test)
   - metrics are computed per image at the ground-truth resolution, then averaged over the images (mean, std)
@@ -44,7 +45,9 @@ def load_split(dataset, split):
 
 def gt_path(dataset, row, data_root=None):
     if data_root:
-        return os.path.join(data_root, LVIT_FOLDERS[row["split"]], "labelcol", row["Mask"])
+        folder = os.path.join(data_root, LVIT_FOLDERS[row["split"]])
+        mask_dir = "labelcol" if os.path.isdir(os.path.join(folder, "labelcol")) else "label"
+        return os.path.join(folder, mask_dir, row["Mask"])
     if dataset == "qata":
         raw_set = "Test Set" if row["split"] == "test" else "Train Set"
         return os.path.join(QATA_RAW, raw_set, "Ground-truths", row["Mask"])

@@ -1,0 +1,33 @@
+# Same as MedCLIPSeg/configs/Covid19.yaml (their QaTa settings), except: data paths point to our export of the
+# frozen split (build_model_data.py), relative to the MedCLIPSeg/ folder that training runs from, and the best
+# val Dice checkpoint is used for prediction instead of the last epoch.
+DATASET:
+  NAME: "MosMedPlus"
+  TRAIN_PATH: "../model_data/medclipseg/MosMedPlus/Train_Folder/"
+  VAL_PATH: "../model_data/medclipseg/MosMedPlus/Val_Folder/"
+  TEST_PATH: "../model_data/medclipseg/MosMedPlus/Test_Folder/"
+  TEXT_PROMPT_PATH: "../model_data/medclipseg/MosMedPlus/Prompts_Folder/"
+  SIZE: 224
+  
+TRAIN:
+  BATCH_SIZE: 24
+  NUM_EPOCHS: 50
+  LEARNING_RATE: 0.0003
+  DICE_WEIGHT: 0.5
+  CE_WEIGHT: 0.5
+  CLIP_WEIGHT: 0.1
+  
+TEST:
+  NUM_SAMPLES: 30
+  USE_LATEST: False
+
+MODEL:
+  CLIP_MODEL: unimedclip
+  BACKBONE: "ViT-B/16"
+  ADAPTER_DIM: 256
+  NUM_UPSCALE: 2
+  BETA: 2.35
+  GATE_INIT: -0.02
+  LAYERS: [1,2,3,4,5,6,7,8,9,10]
+  TEMPERATURE: 0.2
+  DEVICE: "cuda"

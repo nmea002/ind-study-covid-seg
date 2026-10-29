@@ -42,7 +42,10 @@ ckpt_path = os.path.join(session_dir, "models", "best_model-" + model_type + ".p
 data_root = os.path.abspath(os.path.join("datasets", config.task_name))
 
 ckpt = torch.load(ckpt_path, map_location="cuda", weights_only=False)
-state = {k.replace("module.", "", 1): v for k, v in ckpt["state_dict"].items()}  # if saved from DataParallel
+# strip "module." (if saved from DataParallel) and thop's FLOP counters (train_model.py profiles the model with thop
+# before training, which registers total_ops / total_params buffers on every layer; they are not weights)
+state = {k.replace("module.", "", 1): v for k, v in ckpt["state_dict"].items()
+         if not k.endswith(("total_ops", "total_params"))}
 model = LViT(config.get_CTranS_config(), n_channels=config.n_channels, n_classes=config.n_labels)
 model.load_state_dict(state)
 model = model.cuda().eval()

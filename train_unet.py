@@ -5,7 +5,7 @@ Everything except the model is kept the same as the LViT runs, using the LViT re
   - augmentation: Load_Dataset.RandomGenerator / ValGenerator, images read and resized to 224 the same way
   - loss: utils.WeightedDiceBCE(0.5, 0.5); Adam lr 3e-4; cosine warm restarts (T_0=10, eta_min=1e-4) stepped per epoch
   - batch size 2, seed 42; best model = best val Dice, only saved after epoch 5 (same rule as train_model.py)
-  - max 100 epochs, early stop after 20 epochs without a new best val Dice (same as LViT's Config.py)
+  - max 50 epochs, early stop after 20 epochs without a new best val Dice (same as LViT's Config.py)
 The U-Net takes no text, so the BERT text embedding is skipped (bert_embedding is stubbed out to import Load_Dataset).
 
 After training, the best checkpoint predicts every val and test image (probability maps in preds_val/, preds_test/),
@@ -36,7 +36,7 @@ p.add_argument("--task", required=True, choices=["Covid19", "MosMedPlus"])
 p.add_argument("--lvit_dir", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "LViT"),
                help="LViT folder (code + datasets/<task>)")
 p.add_argument("--out_dir", default=None, help="where sessions are saved (default <lvit_dir>/UNet_runs/<task>)")
-p.add_argument("--epochs", type=int, default=100, help="max epochs")
+p.add_argument("--epochs", type=int, default=50, help="max epochs")
 p.add_argument("--patience", type=int, default=20, help="stop after this many epochs without a new best val Dice")
 p.add_argument("--batch_size", type=int, default=2)
 p.add_argument("--lr", type=float, default=3e-4)
