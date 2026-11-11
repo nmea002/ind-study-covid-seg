@@ -49,3 +49,6 @@ __pycache__/
 *.pyc
 .vscode/
 logs/
+
+# demo notebook (kept without outputs)
+!demo/MedSeg_Demo_Colab.ipynb

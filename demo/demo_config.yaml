@@ -1,0 +1,33 @@
+# Which validated checkpoint the demo loads for each modality. Paths are relative to the project root.
+#
+# Selection rule (NEXT_STAGE plan): MedCLIPSeg vs MedSAM3 on the same VAL cases, Dice first. Test numbers are not
+# used to choose. See DEMO_README.md for the table this is based on.
+#
+# STATUS: final (all runs finished). MedSAM3 LoRA fine-tuning never beat the released LoRA on val (best epoch 0),
+# so the released LoRA is the MedSAM3 checkpoint. Each `threshold` is the val-selected one from that run's
+# run_config.json (never picked on test).
+
+modalities:
+  Chest X-ray:
+    backend: medclipseg
+    repo: MedCLIPSeg
+    config: medclipseg_setup/configs/Covid19.yaml
+    # best val Dice checkpoint of runs/medclipseg/Covid19/trained_models/seed42/ (copied off the cluster)
+    checkpoint: demo/weights/medclipseg_qata_best_dice.pth
+    threshold: 0.5  # val-selected, runs/medclipseg/Covid19/trained_models/seed42/run_config.json (best epoch 48)
+    # MedCLIPSeg was trained with one descriptive sentence per image (LViT annotation, MedCLIPSeg wording).
+    # The default is the most frequent training description for QaTa (1587 / 5716 train images). It can be
+    # re-chosen on val with demo/select_default_prompt.py.
+    default_prompt: "Bilateral pulmonary infection involving two regions with involvement of all left lung and all right lung"
+    selection: "MedCLIPSeg, QaTa-COV19-v2 best val Dice checkpoint, epoch 48 (val Dice 0.8229 vs 0.7510 for MedSAM3)"
+
+  Chest CT slice:
+    backend: medsam3
+    repo: MedSAM3
+    config: medsam3_setup/configs/mosmed.yaml
+    # released MedSAM3 v1 LoRA (fine-tuning did not improve on it on val)
+    checkpoint: MedSAM3/medsam3_v1_lora.pt
+    threshold: 0.35  # val-selected, runs/medsam3/mosmed/zeroshot/run_config.json
+    # the concept prompt every MedSAM3 run used (category name of the COCO export)
+    default_prompt: "covid-19 infection"
+    selection: "MedSAM3 zero-shot (released v1 LoRA) on MosMedData+ (val Dice 0.7386 vs 0.6729 for MedCLIPSeg)"

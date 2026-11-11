@@ -1,6 +1,6 @@
 # M2: MedSAM3 LoRA Fine-Tuning
 
-> **Status:** zero-shot inference with the released MedSAM3 LoRA is finished on both datasets. LoRA fine-tuning on both datasets is running in the current cluster job. Its rows say *pending* until the job finishes.
+> **Status:** finished. Zero-shot inference with the released MedSAM3 LoRA is done on both datasets. LoRA fine-tuning stopped on its 9 h time budget on both datasets without improving val Dice, so the selected MedSAM3 checkpoint is the released LoRA (epoch 0).
 
 ## Setup
 | | |
@@ -33,7 +33,7 @@ SAM3 returns several detections, each with a score and a mask. This rule is the 
 3. Pixel probability = the maximum mask probability over the kept detections, or 0 if none are kept.
 4. Threshold the probability map. The threshold is swept from 0.05 to 0.95 on **val**, and the best val Dice value is used once on test.
 
-### Fine-tuning (in progress)
+### Fine-tuning
 | | |
 |---|---|
 | Start | the released MedSAM3 v1 LoRA (epoch 0) |
@@ -64,22 +64,25 @@ Mean ± std per image. The threshold was chosen on val only.
 ### LoRA fine-tuned
 | Dataset | Split | Dice | IoU | HD95 (px) | ASSD (px) | Threshold | Best epoch | Stopped |
 |---|---|---|---|---|---|---|---|---|
-| QaTa-COV19-v2 | val | *pending* | | | | | | |
-| QaTa-COV19-v2 | test | *pending* | | | | | | |
-| MosMedData+ | val | *pending* | | | | | | |
-| MosMedData+ | test | *pending* | | | | | | |
+| QaTa-COV19-v2 | val | 0.7510 ± 0.2247 | 0.6454 ± 0.2497 | 35.32 ± 44.81 | 12.01 ± 29.49 | 0.50 | 0 | 9 h time budget |
+| QaTa-COV19-v2 | test | 0.7677 ± 0.2254 | 0.6691 ± 0.2559 | 32.67 ± 40.26 | 10.07 ± 20.62 | 0.50 | 0 | 9 h time budget |
+| MosMedData+ | val | 0.7386 ± 0.2207 | 0.6232 ± 0.2199 | 61.15 ± 134.84 | 34.37 ± 130.16 | 0.35 | 0 | 9 h time budget, after epoch 2 |
+| MosMedData+ | test | 0.6180 ± 0.2744 | 0.4967 ± 0.2538 | 93.28 ± 196.23 | 69.37 ± 195.10 | 0.35 | 0 | 9 h time budget, after epoch 2 |
+
+Best epoch 0 is the released LoRA itself: no fine-tuned epoch beat it on val, so these rows equal the zero-shot rows. On MosMedData+, the two completed epochs reached val Dice 0.6128 and 0.7319 (threshold 0.5), against 0.7365 for the released LoRA. Each epoch took about 3.5 h (13.5 s per step, GPU shared with two other runs). On QaTa-COV19-v2, one epoch is about 2,860 steps (roughly 10.7 h at that speed), longer than the budget. `medsam3_setup/train.py` cannot resume across jobs, so the 50-epoch / patience-20 protocol was not reachable on this hardware.
 
 ### Comparison with the other models on the same splits (test Dice)
 | Model | QaTa-COV19-v2 | MosMedData+ |
 |---|---|---|
 | U-Net | 0.7818 | 0.5540 |
-| LViT | **0.8191** | 0.5579 |
-| MedCLIPSeg (M1) | *pending* | 0.5043 |
+| LViT | 0.8191 | 0.5579 |
+| MedCLIPSeg (M1) | **0.8414** | 0.5043 |
 | MedSAM3, zero-shot | 0.7677 | **0.6180** |
-| MedSAM3, LoRA fine-tuned | *pending* | *pending* |
+| MedSAM3, LoRA fine-tuned | 0.7677 (= released LoRA) | 0.6180 (= released LoRA) |
 
 ### Observations
-- **Without training on our data:** MedSAM3 zero-shot gets the best Dice, IoU and HD95 on MosMedData+ of all models so far. On QaTa-COV19-v2 it is within 5 Dice points of LViT.
+- **Without training on our data:** MedSAM3 zero-shot gets the best Dice, IoU and HD95 on MosMedData+ of all models. On QaTa-COV19-v2 it is 7 Dice points behind MedCLIPSeg and 5 behind LViT.
+- **Fine-tuning:** within the time budget it did not improve on the released LoRA. The MosMedData+ epochs lowered val Dice (0.61, then 0.73, vs 0.74), so a longer run would have needed a smaller learning rate or more epochs to tell whether fine-tuning helps.
 - **Threshold choice:** the zero-shot val Dice changes by less than 0.01 across thresholds 0.3–0.6 on both datasets. The probability maps are close to binary, so the result does not depend much on the threshold.
 - **MosMedData+, val vs test:** Dice drops from 0.74 on val to 0.62 on test. MedCLIPSeg drops the same way, which points to differences between the 6 val scans and the 25 test scans rather than to the model.
 - **Speed:** with the GPU shared by eight processes, one fine-tuning step took about 18.5 s. That is why fine-tuning runs as a separate job with a time budget.
@@ -89,8 +92,10 @@ Per the plan, MedCLIPSeg and MedSAM3 are compared on the **same val cases**, mai
 
 | Dataset | MedCLIPSeg val Dice | MedSAM3 zero-shot val Dice | MedSAM3 fine-tuned val Dice | Selected |
 |---|---|---|---|---|
-| QaTa-COV19-v2 (X-ray) | *pending* (0.8194 in the training log) | 0.7510 | *pending* | *pending* |
-| MosMedData+ (CT) | 0.6729 | **0.7386** | *pending* | *pending* |
+| QaTa-COV19-v2 (X-ray) | **0.8229** | 0.7510 | 0.7510 (epoch 0) | MedCLIPSeg, epoch 48 checkpoint |
+| MosMedData+ (CT) | 0.6729 | **0.7386** | 0.7386 (epoch 0) | MedSAM3, released v1 LoRA |
+
+Different models win on the two modalities, so the demo loads one checkpoint per modality (see `DEMO_README.md`).
 
 Inference cost (time per image) is the secondary criterion and has not been measured yet.
 - **MedCLIPSeg:** runs 30 stochastic forward passes at 224 px.
@@ -119,7 +124,7 @@ In `runs/medsam3/<qata|mosmed>/<zeroshot|finetune>/` (examples, per-image scores
 ![](runs/medsam3/mosmed/zeroshot/examples/Morozov_study_0282_15.png)
 
 ### Fine-tuned examples and training curves
-*Pending: added when the runs finish.*
+The selected fine-tuned checkpoint is the released LoRA, so its examples are the zero-shot examples above. `runs/medsam3/<dataset>/finetune/` holds the training history and `stop_reason.txt`.
 
 ## Reproduce
 ```bash

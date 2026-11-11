@@ -1,6 +1,6 @@
 # M1: MedCLIPSeg Fine-Tuning
 
-> **Status:** MosMedData+ is finished. QaTa-COV19-v2 is still training: at the time of writing it had run 37 epochs, with a best val Dice of 0.8194 at epoch 25. Its rows say *pending* until the run finishes.
+> **Status:** finished on both datasets.
 
 ## Setup
 | | |
@@ -54,8 +54,8 @@ Test set, mean ± std per image. Each checkpoint and threshold was chosen on val
 
 | Dataset | Split | Dice | IoU | HD95 (px) | ASSD (px) | Threshold | Best epoch | Stopped |
 |---|---|---|---|---|---|---|---|---|
-| QaTa-COV19-v2 | val | *pending* | | | | | | |
-| QaTa-COV19-v2 | test | *pending* | | | | | | |
+| QaTa-COV19-v2 | val | 0.8229 ± 0.1606 | 0.7256 ± 0.1975 | 15.45 ± 18.68 | 4.18 ± 5.56 | 0.50 | 48 | at the 50-epoch cap |
+| QaTa-COV19-v2 | test | 0.8414 ± 0.1653 | 0.7541 ± 0.1998 | 14.32 ± 19.34 | 3.97 ± 7.43 | 0.50 | 48 | at the 50-epoch cap |
 | MosMedData+ | val | 0.6729 ± 0.2110 | 0.5378 ± 0.1975 | 61.35 ± 114.75 | 28.79 ± 105.78 | 0.40 | 45 | at the 50-epoch cap |
 | MosMedData+ | test | 0.5043 ± 0.2921 | 0.3848 ± 0.2472 | 152.64 ± 245.03 | 120.64 ± 251.06 | 0.40 | 45 | at the 50-epoch cap |
 
@@ -63,11 +63,17 @@ Test set, mean ± std per image. Each checkpoint and threshold was chosen on val
 | Model | QaTa-COV19-v2 | MosMedData+ |
 |---|---|---|
 | U-Net | 0.7818 | 0.5540 |
-| LViT | **0.8191** | 0.5579 |
-| MedCLIPSeg | *pending* | 0.5043 |
+| LViT | 0.8191 | 0.5579 |
+| MedCLIPSeg | **0.8414** | 0.5043 |
 | MedSAM3, zero-shot (see M2) | 0.7677 | **0.6180** |
 
 ### Observations
+- **QaTa-COV19-v2:** MedCLIPSeg has the best test Dice of all models (0.8414, vs 0.8191 for LViT), with no empty predictions on val or test.
+  - The threshold barely matters: val Dice stays within 0.002 of its best (0.8229 at 0.50) for thresholds 0.35–0.60.
+  - Test Dice is higher than val Dice. Test is the official QaTa test set, and val is a part of the official train set.
+- **QaTa-COV19-v2, training:** the run hit the 50-epoch cap, with the best val Dice at epoch 48, so it had not plateaued completely. The best val Dice stayed at 0.8194 (epoch 25) until epoch 48, which improved it by only 0.0035.
+  - Val Dice dropped sharply at epoch 27 (0.73, from 0.82), with a jump in train loss, and recovered by epoch 32. The cause was not identified; it is visible in `curves.png`.
+  - Training ran over several Slurm jobs, resuming from the latest checkpoint. One resume (after epoch 37) failed (`train.py` loaded Adam's state while the model was still on the CPU). That failure happened before any update, and the fix (moving the model to the GPU before loading) does not change training, so the results are unaffected.
 - **MosMedData+, val vs test:** val Dice is 0.67 but test Dice only 0.50. Val has 6 scans and test has 25, so the checkpoint and threshold were chosen on few patients and did not carry over well.
   - The large HD95 and ASSD standard deviations come from slices where only one of the prediction and the ground truth is empty. Each of those gets the image-diagonal penalty of about 724 px.
   - Per-image scores are in `per_image_test.csv`.
@@ -93,8 +99,13 @@ In `runs/medclipseg/<Covid19|MosMedPlus>/trained_models/seed42/` (training curve
 ### MosMedData+ training curves
 ![](runs/medclipseg/MosMedPlus/trained_models/seed42/curves.png)
 
-### QaTa-COV19-v2 examples and curves
-*Pending: added when the run finishes.*
+### QaTa-COV19-v2 examples (test)
+![](runs/medclipseg/Covid19/trained_models/seed42/examples/sub-S09475_ses-E24600_run-1_bp-chest_cr.png)
+![](runs/medclipseg/Covid19/trained_models/seed42/examples/sub-S09678_ses-E18547_run-1_bp-chest_vp-ap_dx.png)
+![](runs/medclipseg/Covid19/trained_models/seed42/examples/sub-S09827_ses-E25861_run-1_bp-chest_vp-ap_dx.png)
+
+### QaTa-COV19-v2 training curves
+![](runs/medclipseg/Covid19/trained_models/seed42/curves.png)
 
 ## Reproduce
 ```bash

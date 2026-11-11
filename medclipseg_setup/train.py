@@ -118,7 +118,9 @@ def main():
                             worker_init_fn=worker_init_fn, pin_memory=True)
     log.info(f"train: {len(train_set)} images | val: {len(val_set)} images")
 
-    model = build_medclipseg_unimedclip(cfg)
+    # on the GPU before the optimizer exists: optimizer.load_state_dict() puts Adam's state on the device the
+    # parameters are on at that moment, and a later model.to(cuda) would leave it on the CPU (crash on resume)
+    model = build_medclipseg_unimedclip(cfg).to(cfg.MODEL.DEVICE)
     log.info(f"trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
     ce_loss = BCEWithLogitsLoss()
     dice_loss = monai.losses.DiceLoss(include_background=False, sigmoid=True, reduction="mean")
@@ -160,7 +162,7 @@ def main():
         "inference": f"mean of {cfg.TEST.NUM_SAMPLES} stochastic forward passes (MedCLIPSeg's test protocol)",
         "seed": cfg.seed, "checkpoint": os.path.abspath(best_path)})
 
-    model.train().to(cfg.MODEL.DEVICE)
+    model.train()
     budget = cfg.time_budget_hours * 3600
     longest_epoch = 0.0
     finished = True
